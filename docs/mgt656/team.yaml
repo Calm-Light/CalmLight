@@ -1,11 +1,11 @@
 framework: django
 database: postgres
 members:
-  - nickname: TODO
-    github: TODO
-  - nickname: TODO
-    github: TODO
-  - nickname: TODO
-    github: TODO
-  - nickname: TODO
-    github: TODO
+  - nickname: muddy-armadillo
+    github: penelopeyin
+  - nickname: zany-pony
+    github: CherishChenCherish
+  - nickname: faithful-caribou
+    github: Amnayousaf-17
+  - nickname: inquisitive-snail 
+    github: sup011
