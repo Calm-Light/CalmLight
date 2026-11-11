@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}A/B test · MedTrack{% endblock %}
+{% block content %}
+<h1 class="h3">Team</h1>
+<ul>{% for name in members %}<li>{{ name }}</li>{% endfor %}</ul>
+{# TODO(A/B issue): exactly one <button id="abtest"> with the visitor's variant, inside a POST form. #}
+{% endblock %}
