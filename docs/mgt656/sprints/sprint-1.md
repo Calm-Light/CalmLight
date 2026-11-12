@@ -16,3 +16,4 @@ The team reports checking the skeleton and account feedback on staging, includin
 The agent generated the account forms, feedback messages, and tests. During staging testing, the team found signup errors difficult to distinguish from password guidance. They changed the forms to highlight errors and show password guidance only when no error is present.
 
 ## Backlog changes for next sprint
+The initial walking-skeleton, account-feedback, and A/B stories are closed (issue #4, issue #5, issue #7). Four sprint iterations have been created in the team GitHub Project.
