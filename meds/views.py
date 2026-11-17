@@ -60,7 +60,9 @@ def medication_fill(request):
     usage.save(update_fields=["succeeded"])
 
     if not fields:
-        messages.warning(request, "The AI couldn't find medication details in that text. Please fill in the form yourself.")
+        messages.warning(
+            request, "The AI couldn't find medication details in that text. Please fill in the form yourself."
+        )
         return _render_add(request, MedicationForm(), label_form)
 
     messages.info(request, "The AI filled in the form. Check every field before you save. It can make mistakes.")

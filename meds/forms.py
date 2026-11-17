@@ -52,7 +52,10 @@ class LabelTextForm(BootstrapMixin, forms.Form):
         label="Paste the label text",
         max_length=1000,
         widget=forms.Textarea(
-            attrs={"rows": 3, "placeholder": "e.g. Metformin 500 mg tablet. Take 1 tablet by mouth twice daily with meals."}
+            attrs={
+                "rows": 3,
+                "placeholder": "e.g. Metformin 500 mg tablet. Take 1 tablet by mouth twice daily with meals.",
+            }
         ),
         help_text="Don't include your name or other personal details.",
     )
