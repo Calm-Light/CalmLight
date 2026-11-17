@@ -65,6 +65,8 @@ TEAM_MEMBERS = ["muddy-armadillo", "zany-pony", "faithful-caribou", "inquisitive
 
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "")
+# How many AI requests one user may make per day (keeps cost predictable).
+AI_DAILY_LIMIT = int(os.environ.get("AI_DAILY_LIMIT", "20"))
 
 
 # --- Applications -------------------------------------------------------------

@@ -43,3 +43,16 @@ class MedicationForm(BootstrapMixin, forms.ModelForm):
 
     def clean_name(self):
         return " ".join(self.cleaned_data["name"].split())
+
+
+class LabelTextForm(BootstrapMixin, forms.Form):
+    """Smart add: the user pastes the text from a prescription label."""
+
+    label_text = forms.CharField(
+        label="Paste the label text",
+        max_length=1000,
+        widget=forms.Textarea(
+            attrs={"rows": 3, "placeholder": "e.g. Metformin 500 mg tablet. Take 1 tablet by mouth twice daily with meals."}
+        ),
+        help_text="Don't include your name or other personal details.",
+    )

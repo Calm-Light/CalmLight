@@ -5,4 +5,5 @@ from meds import views
 urlpatterns = [
     path("", views.home, name="home"),
     path("medications/add/", views.medication_add, name="medication_add"),
+    path("medications/add/fill/", views.medication_fill, name="medication_fill"),
 ]
