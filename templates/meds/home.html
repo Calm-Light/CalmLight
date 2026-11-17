@@ -1,5 +1,34 @@
 {% extends "base.html" %}
+{% block title %}My medications · MedTrack{% endblock %}
 {% block content %}
-<h1 class="h3">Today</h1>
-<p class="text-body-secondary">Your medication checklist will appear here.</p>
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+  <h1 class="h3 m-0">My medications</h1>
+  <a class="btn btn-primary" href="{% url 'medication_add' %}">Add medication</a>
+</div>
+
+{% if medications %}
+<div class="list-group">
+  {% for med in medications %}
+  <div class="list-group-item">
+    <div class="d-flex flex-wrap justify-content-between gap-2">
+      <span class="fw-semibold">{{ med.name }}</span>
+      <span>{{ med.dose }}</span>
+    </div>
+    <div class="small text-body-secondary">
+      {{ med.get_times_per_day_display }} · {{ med.get_route_display }}{% if med.meal_timing != "none" %} · {{ med.get_meal_timing_display }}{% endif %}
+    </div>
+    <div class="small text-body-secondary">
+      From {{ med.start_date|date:"M j, Y" }}{% if med.end_date %} to {{ med.end_date|date:"M j, Y" }}{% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="text-center text-body-secondary border rounded p-4">
+  <p class="mb-2">You haven't added any medications yet.</p>
+  <a href="{% url 'medication_add' %}">Add your first medication</a>
+</div>
+{% endif %}
+
+<p class="small text-body-secondary mt-4">MedTrack keeps track of what you enter. It does not give medical advice.</p>
 {% endblock %}

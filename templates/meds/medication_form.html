@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Add medication · MedTrack{% endblock %}
+{% block content %}
+<div class="row justify-content-center"><div class="col-md-8 col-lg-6">
+  <h1 class="h3 mb-3">Add medication</h1>
+  {% include "registration/_form_errors.html" %}
+  <form method="post" novalidate>{% csrf_token %}
+    {% with field=form.name %}{% include "registration/_field.html" %}{% endwith %}
+    <div class="row g-2">
+      <div class="col-6">{% with field=form.dose_amount %}{% include "registration/_field.html" %}{% endwith %}</div>
+      <div class="col-6">{% with field=form.dose_unit %}{% include "registration/_field.html" %}{% endwith %}</div>
+    </div>
+    {% with field=form.route %}{% include "registration/_field.html" %}{% endwith %}
+    {% with field=form.times_per_day %}{% include "registration/_field.html" %}{% endwith %}
+    {% with field=form.meal_timing %}{% include "registration/_field.html" %}{% endwith %}
+    <div class="row g-2">
+      <div class="col-sm-6">{% with field=form.start_date %}{% include "registration/_field.html" %}{% endwith %}</div>
+      <div class="col-sm-6">{% with field=form.end_date %}{% include "registration/_field.html" %}{% endwith %}</div>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-primary" type="submit">Save</button>
+      <a class="btn btn-outline-secondary" href="{% url 'home' %}">Cancel</a>
+    </div>
+  </form>
+</div></div>
+{% endblock %}
