@@ -22,7 +22,7 @@ ACCOUNTS = [
 ]
 
 EXTRA_SEEDERS = [
-    # "meds.seed.seed",
+    "meds.seed.seed",
 ]
 
 
