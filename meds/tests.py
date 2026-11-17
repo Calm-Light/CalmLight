@@ -195,6 +195,10 @@ class CleanLabelFieldsTests(SimpleTestCase):
         self.assertEqual(ai.clean_label_fields({"dose_amount": 0.5})[0]["dose_amount"], Decimal("0.5"))
         self.assertNotIn("dose_amount", ai.clean_label_fields({"dose_amount": "NaN"})[0])
 
+    def test_whole_number_doses_show_as_plain_digits(self):
+        for raw, shown in [(500, "500"), (10, "10"), (1000, "1000"), ("100.00", "100"), (2.5, "2.5"), (0.25, "0.25")]:
+            self.assertEqual(str(ai.clean_label_fields({"dose_amount": raw})[0]["dose_amount"]), shown)
+
 
 @override_settings(OPENROUTER_API_KEY="test-key", OPENROUTER_MODEL="test-model")
 class ParseLabelTests(SimpleTestCase):
@@ -252,6 +256,13 @@ class SmartAddViewTests(TestCase):
         self.assertContains(response, "Check every field before you save")
         self.assertEqual(Medication.objects.count(), 0)
         parse.assert_called_once()
+
+    @override_settings(OPENROUTER_API_KEY="test-key", OPENROUTER_MODEL="test-model")
+    @mock.patch("meds.ai.call_openrouter", return_value='{"name": "metformin", "dose_amount": 500}')
+    def test_filled_dose_shows_plain_digits(self, _):
+        response = self.fill()
+        self.assertContains(response, 'name="dose_amount" value="500"')
+        self.assertNotContains(response, "5E+2")
 
     @mock.patch("meds.views.ai.parse_label", return_value=({"name": "metformin"}, ["dose", "unit", "how often"]))
     def test_lists_fields_the_user_must_fill(self, _):

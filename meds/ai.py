@@ -107,7 +107,11 @@ def clean_label_fields(data):
         try:
             value = Decimal(str(amount))
             if value.is_finite() and Decimal("0") < value < Decimal("1000000"):
-                fields["dose_amount"] = value.quantize(Decimal("0.01")).normalize()
+                value = value.quantize(Decimal("0.01")).normalize()
+                # normalize() turns 500 into 5E+2; keep whole numbers as plain digits for the form.
+                if value == value.to_integral_value():
+                    value = value.quantize(Decimal("1"))
+                fields["dose_amount"] = value
         except InvalidOperation:
             pass
 
