@@ -380,19 +380,35 @@ class EditStopDeleteTests(TestCase):
     def test_stop_moves_medication_to_past(self):
         response = self.client.post(self.url("medication_stop"), follow=True)
         self.med.refresh_from_db()
-        self.assertEqual((self.med.discontinued_on, self.med.end_date), (self.today, self.today))
+        self.assertEqual((self.med.discontinued_on, self.med.end_date), (self.today, None))
         self.assertEqual(list(response.context["medications"]), [])
         self.assertEqual(list(response.context["past_medications"]), [self.med])
         self.assertContains(response, "Past medications")
         self.assertContains(response, f"Stopped {self.today:%b} {self.today.day}, {self.today.year}")
         self.assertContains(response, "You aren't taking any medications right now.")
 
-    def test_stop_keeps_an_earlier_end_date(self):
-        self.med.end_date = self.today + timedelta(days=5)
+    def test_stop_and_restart_keep_the_planned_end_date(self):
+        # Reported in review: end Nov 24, stopped by mistake, restarted -> must still end Nov 24.
+        planned_end = self.today + timedelta(days=7)
+        self.med.end_date = planned_end
         self.med.save()
         self.client.post(self.url("medication_stop"))
         self.med.refresh_from_db()
-        self.assertEqual(self.med.end_date, self.today)
+        self.assertEqual((self.med.discontinued_on, self.med.end_date), (self.today, planned_end))
+        self.assertIn(self.med, Medication.objects.past())
+        self.client.post(self.url("medication_resume"))
+        self.med.refresh_from_db()
+        self.assertEqual((self.med.discontinued_on, self.med.end_date), (None, planned_end))
+        self.assertIn(self.med, Medication.objects.active())
+
+    def test_restart_after_end_date_passed_explains_why_it_stays_past(self):
+        old = self.make_med(self.user, "amoxicillin", start_date=self.today - timedelta(days=10),
+                            end_date=self.today - timedelta(days=1), discontinued_on=self.today - timedelta(days=5))
+        response = self.client.post(self.url("medication_resume", old), follow=True)
+        old.refresh_from_db()
+        self.assertIsNone(old.discontinued_on)
+        self.assertEqual(list(response.context["past_medications"]), [old])
+        self.assertContains(response, "has passed, so it stays under Past medications")
 
     def test_stop_before_start_date_does_not_break_the_date_rule(self):
         future = self.make_med(self.user, "lisinopril", start_date=self.today + timedelta(days=3))
@@ -407,7 +423,7 @@ class EditStopDeleteTests(TestCase):
         response = self.client.post(self.url("medication_resume"), follow=True)
         self.med.refresh_from_db()
         self.assertIsNone(self.med.discontinued_on)
-        self.assertIsNone(self.med.end_date)
+        self.assertIsNone(self.med.end_date)  # it had no end date before the stop, and still has none
         self.assertEqual(list(response.context["medications"]), [self.med])
         self.assertContains(response, "Restarted metformin.")
 

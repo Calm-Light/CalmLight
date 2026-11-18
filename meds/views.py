@@ -103,7 +103,14 @@ def medication_stop(request, pk):
 def medication_resume(request, pk):
     medication = _own_medication(request, pk)
     medication.resume()
-    messages.success(request, f"Restarted {medication.name}.")
+    if medication.has_ended:
+        messages.warning(
+            request,
+            f"Restarted {medication.name}, but its end date ({medication.end_date:%b} {medication.end_date.day}) "
+            "has passed, so it stays under Past medications. Edit it to change the end date.",
+        )
+    else:
+        messages.success(request, f"Restarted {medication.name}.")
     return redirect("home")
 
 

@@ -102,19 +102,18 @@ class Medication(models.Model):
             raise ValidationError({"end_date": "End date cannot be earlier than the start date."})
 
     def discontinue(self, today=None):
-        """Stop taking it today. It moves to the user's past medications."""
-        today = today or timezone.localdate()
-        self.discontinued_on = today
-        if self.start_date <= today and (self.end_date is None or self.end_date > today):
-            self.end_date = today
-        self.save(update_fields=["discontinued_on", "end_date", "updated_at"])
+        """Stop taking it today. It moves to the user's past medications; the planned end date is kept."""
+        self.discontinued_on = today or timezone.localdate()
+        self.save(update_fields=["discontinued_on", "updated_at"])
 
     def resume(self):
-        """Undo a stop. Clears the end date only if the stop set it."""
-        if self.end_date is not None and self.end_date == self.discontinued_on:
-            self.end_date = None
+        """Undo a stop. The end date was never changed, so nothing else needs restoring."""
         self.discontinued_on = None
-        self.save(update_fields=["discontinued_on", "end_date", "updated_at"])
+        self.save(update_fields=["discontinued_on", "updated_at"])
+
+    @property
+    def has_ended(self):
+        return self.end_date is not None and self.end_date < timezone.localdate()
 
 
 class AIRequest(models.Model):

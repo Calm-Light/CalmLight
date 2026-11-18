@@ -14,7 +14,7 @@
   </form>
   {% else %}
   <h1 class="h3 mb-3">Stop taking {{ medication.name }}?</h1>
-  <p>{{ medication.name }} {{ medication.dose }} will move to Past medications, with today as the stop date. You can restart it later.</p>
+  <p>{{ medication.name }} {{ medication.dose }} will move to Past medications, with today as the stop date. Its end date doesn't change, and you can restart it later.</p>
   <p class="small text-body-secondary">Talk to your doctor or pharmacist before you stop a medication.</p>
   <form method="post">{% csrf_token %}
     <div class="d-flex gap-2">
