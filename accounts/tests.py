@@ -35,10 +35,10 @@ class AuthFlowTests(TestCase):
     def test_signup_logs_user_in(self):
         response = self.client.post(
             reverse("signup"),
-            {"username": "newuser", "password1": "a-long-pass-987", "password2": "a-long-pass-987"},
+            {"email": "newuser@example.com", "password1": "a-long-pass-987", "password2": "a-long-pass-987"},
         )
         self.assertRedirects(response, reverse("home"))
-        self.assertTrue(get_user_model().objects.filter(username="newuser").exists())
+        self.assertTrue(get_user_model().objects.filter(username="newuser@example.com").exists())
 
     def test_home_requires_login(self):
         response = self.client.get(reverse("home"))
@@ -57,11 +57,11 @@ class VisibleFeedbackTests(TestCase):
     def test_wrong_password_shows_red_alert(self):
         response = self.client.post(reverse("login"), {"username": "nobody", "password": "wrong"})
         self.assertContains(response, 'class="alert alert-danger"')
-        self.assertContains(response, "Please enter a correct username")
+        self.assertContains(response, "Please enter a correct email")
 
     def test_weak_signup_password_marks_field_invalid(self):
         response = self.client.post(
-            reverse("signup"), {"username": "weak", "password1": "123", "password2": "123"}
+            reverse("signup"), {"email": "weak@example.com", "password1": "123", "password2": "123"}
         )
         self.assertContains(response, 'class="alert alert-danger"')
         self.assertContains(response, "is-invalid")
@@ -77,10 +77,10 @@ class VisibleFeedbackTests(TestCase):
     def test_signup_shows_welcome_message(self):
         response = self.client.post(
             reverse("signup"),
-            {"username": "fresh", "password1": "a-long-pass-987", "password2": "a-long-pass-987"},
+            {"email": "fresh@example.com", "password1": "a-long-pass-987", "password2": "a-long-pass-987"},
             follow=True,
         )
-        self.assertContains(response, "Account created. Welcome, fresh!")
+        self.assertContains(response, "Account created. Welcome, fresh@example.com!")
         self.assertNotContains(response, "Logged in as")
 
     def test_logout_shows_message(self):
@@ -88,3 +88,73 @@ class VisibleFeedbackTests(TestCase):
         self.client.login(username="u", password="a-long-pass-987")
         response = self.client.post(reverse("logout"), follow=True)
         self.assertContains(response, "You have been logged out.")
+
+
+class EmailSignupTests(TestCase):
+    """Issue #9: register with an email address and password."""
+
+    def signup(self, email="Pat@Example.com ", password="a-long-pass-987", **extra):
+        data = {"email": email, "password1": password, "password2": password, **extra}
+        return self.client.post(reverse("signup"), data)
+
+    def test_signup_page_asks_for_email_not_username(self):
+        response = self.client.get(reverse("signup"))
+        self.assertContains(response, 'type="email"')
+        self.assertContains(response, 'name="email"')
+        self.assertNotContains(response, 'name="username"')
+
+    def test_email_becomes_lower_case_username_and_password_is_hashed(self):
+        self.assertRedirects(self.signup(), reverse("home"))
+        user = get_user_model().objects.get()
+        self.assertEqual((user.username, user.email), ("pat@example.com", "pat@example.com"))
+        self.assertNotEqual(user.password, "a-long-pass-987")
+        self.assertTrue(user.check_password("a-long-pass-987"))
+        self.assertFalse(user.is_staff)
+
+    def test_email_is_required_and_must_be_valid(self):
+        for email, error in [("", "This field is required."), ("not-an-email", "Enter a valid email address.")]:
+            with self.subTest(email=email):
+                response = self.signup(email=email)
+                self.assertContains(response, error)
+                self.assertContains(response, "is-invalid")
+        self.assertFalse(get_user_model().objects.exists())
+
+    def test_duplicate_email_is_rejected_ignoring_case(self):
+        get_user_model().objects.create_user("member@example.com", "member@example.com", "a-long-pass-987")
+        response = self.signup(email="MEMBER@example.com")
+        self.assertContains(response, "An account with this email already exists.")
+        self.assertEqual(get_user_model().objects.count(), 1)
+
+    def test_password_needs_8_characters_and_must_match(self):
+        self.assertContains(self.signup(password="short1x"), "at least 8 characters")
+        response = self.client.post(reverse("signup"), {"email": "a@example.com", "password1": "a-long-pass-987",
+                                                        "password2": "a-long-pass-988"})
+        self.assertContains(response, "didn")  # "The two password fields didn't match."
+        self.assertFalse(get_user_model().objects.exists())
+
+    def test_password_too_similar_to_email_is_rejected(self):
+        self.assertContains(self.signup(email="sunflower7@example.com", password="sunflower7"), "too similar")
+
+    def test_login_with_email_in_any_case(self):
+        self.signup()
+        self.client.logout()
+        response = self.client.post(reverse("login"), {"username": " PAT@example.com", "password": "a-long-pass-987"})
+        self.assertRedirects(response, reverse("home"))
+
+    def test_seeded_accounts_still_log_in(self):
+        get_user_model().objects.create_user("member@example.com", "member@example.com", "a-long-pass-987")
+        response = self.client.post(reverse("login"), {"username": "member@example.com", "password": "a-long-pass-987"})
+        self.assertRedirects(response, reverse("home"))
+
+
+class ErrorPageTests(TestCase):
+    def test_404_page_uses_site_layout(self):
+        response = self.client.get("/no-such-page/")
+        self.assertEqual(response.status_code, 404)
+        self.assertContains(response, "Page not found", status_code=404)
+        self.assertContains(response, "MedTrack", status_code=404)
+
+    def test_500_page_renders_without_context(self):
+        from django.template.loader import render_to_string
+
+        self.assertIn("Something went wrong", render_to_string("500.html"))
