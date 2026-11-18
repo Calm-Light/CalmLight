@@ -75,7 +75,11 @@ LABEL_PROMPT = """You read prescription labels and fill in a medication form.
 Use only what the text says. If a value is not stated or you are unsure, use null. Never guess a dose.
 - name: the generic name (if only a brand name is given, use the brand name), lowercase.
 - dose_amount and dose_unit: the amount taken each time, e.g. "take 2 tablets" -> 2, "tablet";
-  "500 mg tablet, take 1" -> 500, "mg".
+  "500 mg tablet, take 1" -> 500, "mg". Sprays and inhaler puffs -> "puff"; eye, ear or nose drops -> "drop";
+  insulin -> "units". Use "tablet" or "capsule" only for things that are swallowed.
+- route: "oral" for anything swallowed or taken by mouth ("by mouth", "PO", "swallow", tablets and capsules
+  with no other route); "subcutaneous" for injections under the skin; "topical" for creams or ointments applied
+  to the skin; "transdermal" for patches; "nasal" for sprays in the nose; "other" for any other stated route.
 - times_per_day: 1, 2 or 3 ("every 12 hours" = 2, "every 8 hours" = 3). Use null for other schedules or "as needed".
 - meal_timing: "before", "with" or "after" meals, or "none" if the label gives no meal instruction.
 Reply with JSON only."""
@@ -88,6 +92,10 @@ FIELD_LABELS = {
     "times_per_day": "how often",
     "meal_timing": "meal instructions",
 }
+
+# These form fields have a default (Oral, No meal instructions), so a missing value shows the default
+# and the user is asked to check it rather than fill it in.
+FIELDS_WITH_DEFAULT = {FIELD_LABELS["route"], FIELD_LABELS["meal_timing"]}
 
 
 def clean_label_fields(data):
