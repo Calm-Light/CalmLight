@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Page not found · MedTrack{% endblock %}
+{% block content %}
+<div class="text-center py-5">
+  <h1 class="h3">Page not found</h1>
+  <p class="text-body-secondary">This page doesn't exist, or it belongs to another account.</p>
+  <a class="btn btn-primary" href="{% url 'home' %}">Go to My medications</a>
+</div>
+{% endblock %}
