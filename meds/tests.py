@@ -332,3 +332,164 @@ class SmartAddViewTests(TestCase):
         self.fill()
         self.client.post(reverse("medication_add"), {**VALID})
         self.assertEqual(Medication.objects.get().user, self.user)
+
+
+class EditStopDeleteTests(TestCase):
+    def setUp(self):
+        self.user = make_user("alice@example.com")
+        self.other = make_user("bob@example.com")
+        self.client.login(username="alice@example.com", password=PASSWORD)
+        self.today = timezone.localdate()
+        self.med = self.make_med(self.user, "metformin", start_date=self.today - timedelta(days=30))
+
+    @staticmethod
+    def make_med(user, name, **extra):
+        fields = {"dose_amount": Decimal("500"), "dose_unit": "mg", "times_per_day": 2,
+                  "start_date": date(2026, 11, 1), **extra}
+        return Medication.objects.create(user=user, name=name, **fields)
+
+    def url(self, name, med=None):
+        return reverse(name, args=[(med or self.med).pk])
+
+    # --- edit ---
+    def test_edit_page_shows_current_values_without_ai_card(self):
+        response = self.client.get(self.url("medication_edit"))
+        self.assertContains(response, "Edit metformin")
+        self.assertContains(response, 'value="metformin"')
+        self.assertContains(response, 'value="500.00"')
+        self.assertNotContains(response, "Fill in with AI")
+        self.assertContains(response, self.url("medication_delete"))
+
+    def test_edit_saves_changes(self):
+        data = {**VALID, "dose_amount": "1000", "times_per_day": "3", "route": "oral", "meal_timing": "after",
+                "start_date": "2026-10-01", "end_date": "2027-01-31"}
+        response = self.client.post(self.url("medication_edit"), data, follow=True)
+        self.assertRedirects(response, reverse("home"))
+        self.assertContains(response, "Saved changes to metformin.")
+        self.med.refresh_from_db()
+        self.assertEqual((self.med.dose_amount, self.med.times_per_day, self.med.meal_timing),
+                         (Decimal("1000"), 3, "after"))
+        self.assertEqual((self.med.start_date, self.med.end_date), (date(2026, 10, 1), date(2027, 1, 31)))
+        self.assertContains(response, "1000 mg")
+
+    def test_edit_rejects_invalid_values_and_keeps_old_data(self):
+        response = self.client.post(self.url("medication_edit"),
+                                    {**VALID, "name": "", "start_date": "2026-11-10", "end_date": "2026-11-01"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Edit metformin")  # heading keeps the saved name
+        self.assertContains(response, "End date cannot be earlier than the start date.")
+        self.med.refresh_from_db()
+        self.assertEqual(self.med.name, "metformin")
+        self.assertIsNone(self.med.end_date)
+
+    def test_edit_cannot_change_the_owner(self):
+        self.client.post(self.url("medication_edit"), {**VALID, "user": self.other.pk})
+        self.med.refresh_from_db()
+        self.assertEqual(self.med.user, self.user)
+
+    # --- stop / restart ---
+    def test_stop_asks_first_and_get_changes_nothing(self):
+        response = self.client.get(self.url("medication_stop"))
+        self.assertContains(response, "Stop taking metformin?")
+        self.med.refresh_from_db()
+        self.assertIsNone(self.med.discontinued_on)
+
+    def test_stop_moves_medication_to_past(self):
+        response = self.client.post(self.url("medication_stop"), follow=True)
+        self.med.refresh_from_db()
+        self.assertEqual((self.med.discontinued_on, self.med.end_date), (self.today, None))
+        self.assertEqual(list(response.context["medications"]), [])
+        self.assertEqual(list(response.context["past_medications"]), [self.med])
+        self.assertContains(response, "Past medications")
+        self.assertContains(response, f"Stopped {self.today:%b} {self.today.day}, {self.today.year}")
+        self.assertContains(response, "You aren't taking any medications right now.")
+
+    def test_stop_and_restart_keep_the_planned_end_date(self):
+        # Reported in review: end Nov 24, stopped by mistake, restarted -> must still end Nov 24.
+        planned_end = self.today + timedelta(days=7)
+        self.med.end_date = planned_end
+        self.med.save()
+        self.client.post(self.url("medication_stop"))
+        self.med.refresh_from_db()
+        self.assertEqual((self.med.discontinued_on, self.med.end_date), (self.today, planned_end))
+        self.assertIn(self.med, Medication.objects.past())
+        self.client.post(self.url("medication_resume"))
+        self.med.refresh_from_db()
+        self.assertEqual((self.med.discontinued_on, self.med.end_date), (None, planned_end))
+        self.assertIn(self.med, Medication.objects.active())
+
+    def test_restart_after_end_date_passed_explains_why_it_stays_past(self):
+        old = self.make_med(self.user, "amoxicillin", start_date=self.today - timedelta(days=10),
+                            end_date=self.today - timedelta(days=1), discontinued_on=self.today - timedelta(days=5))
+        response = self.client.post(self.url("medication_resume", old), follow=True)
+        old.refresh_from_db()
+        self.assertIsNone(old.discontinued_on)
+        self.assertEqual(list(response.context["past_medications"]), [old])
+        self.assertContains(response, "has passed, so it stays under Past medications")
+
+    def test_stop_before_start_date_does_not_break_the_date_rule(self):
+        future = self.make_med(self.user, "lisinopril", start_date=self.today + timedelta(days=3))
+        self.client.post(self.url("medication_stop", future))
+        future.refresh_from_db()
+        self.assertEqual(future.discontinued_on, self.today)
+        self.assertIsNone(future.end_date)
+        self.assertIn(future, Medication.objects.past())
+
+    def test_restart_undoes_stop(self):
+        self.client.post(self.url("medication_stop"))
+        response = self.client.post(self.url("medication_resume"), follow=True)
+        self.med.refresh_from_db()
+        self.assertIsNone(self.med.discontinued_on)
+        self.assertIsNone(self.med.end_date)  # it had no end date before the stop, and still has none
+        self.assertEqual(list(response.context["medications"]), [self.med])
+        self.assertContains(response, "Restarted metformin.")
+
+    def test_restart_requires_post(self):
+        self.assertEqual(self.client.get(self.url("medication_resume")).status_code, 405)
+
+    def test_medication_past_its_end_date_is_in_past_list(self):
+        ended = self.make_med(self.user, "amoxicillin", start_date=self.today - timedelta(days=10),
+                              end_date=self.today - timedelta(days=1))
+        ends_today = self.make_med(self.user, "ibuprofen", start_date=self.today - timedelta(days=2),
+                                   end_date=self.today)
+        response = self.client.get(reverse("home"))
+        self.assertEqual(list(response.context["medications"]), [ends_today, self.med])
+        self.assertEqual(list(response.context["past_medications"]), [ended])
+        self.assertNotContains(response, self.url("medication_resume", ended))  # nothing to restart
+
+    # --- delete ---
+    def test_delete_asks_first_and_get_changes_nothing(self):
+        response = self.client.get(self.url("medication_delete"))
+        self.assertContains(response, "Delete metformin?")
+        self.assertTrue(Medication.objects.filter(pk=self.med.pk).exists())
+
+    def test_delete_removes_medication(self):
+        response = self.client.post(self.url("medication_delete"), follow=True)
+        self.assertRedirects(response, reverse("home"))
+        self.assertContains(response, "Deleted metformin.")
+        self.assertFalse(Medication.objects.filter(pk=self.med.pk).exists())
+
+    # --- access ---
+    def test_other_users_medication_is_404_for_every_action(self):
+        bobs = self.make_med(self.other, "warfarin")
+        for name in ["medication_edit", "medication_stop", "medication_resume", "medication_delete"]:
+            with self.subTest(name):
+                self.assertEqual(self.client.post(self.url(name, bobs), VALID).status_code, 404)
+                if name != "medication_resume":
+                    self.assertEqual(self.client.get(self.url(name, bobs)).status_code, 404)
+        bobs.refresh_from_db()
+        self.assertEqual((bobs.name, bobs.discontinued_on), ("warfarin", None))
+
+    def test_actions_require_login(self):
+        self.client.logout()
+        for name in ["medication_edit", "medication_stop", "medication_delete"]:
+            with self.subTest(name):
+                url = self.url(name)
+                self.assertRedirects(self.client.get(url), f"{reverse('login')}?next={url}")
+        self.client.post(self.url("medication_delete"))
+        self.assertTrue(Medication.objects.filter(pk=self.med.pk).exists())
+
+    def test_list_shows_edit_and_stop_links(self):
+        response = self.client.get(reverse("home"))
+        self.assertContains(response, self.url("medication_edit"))
+        self.assertContains(response, self.url("medication_stop"))

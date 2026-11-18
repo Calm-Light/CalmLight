@@ -1,0 +1,10 @@
+<div class="d-flex flex-wrap justify-content-between gap-2">
+  <span class="fw-semibold">{{ med.name }}</span>
+  <span>{{ med.dose }}</span>
+</div>
+<div class="small text-body-secondary">
+  {{ med.get_times_per_day_display }} · {{ med.get_route_display }}{% if med.meal_timing != "none" %} · {{ med.get_meal_timing_display }}{% endif %}
+</div>
+<div class="small text-body-secondary">
+  From {{ med.start_date|date:"M j, Y" }}{% if med.end_date %} to {{ med.end_date|date:"M j, Y" }}{% endif %}{% if med.discontinued_on %} · Stopped {{ med.discontinued_on|date:"M j, Y" }}{% endif %}
+</div>
