@@ -1,7 +1,10 @@
+import runpy
 from datetime import date, timedelta
 from decimal import Decimal
+from pathlib import Path
 from unittest import mock
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.test import SimpleTestCase, TestCase, override_settings
@@ -76,6 +79,7 @@ class AddMedicationTests(TestCase):
             with self.subTest(amount=amount):
                 response = self.post(dose_amount=amount)
                 self.assertContains(response, "is-invalid")
+                self.assertContains(response, "Dose must be more than 0.")
         self.assertEqual(Medication.objects.count(), 0)
 
     def test_end_date_cannot_be_before_start_date(self):
@@ -169,6 +173,18 @@ class OpenRouterClientTests(SimpleTestCase):
     def test_network_failure_raises_ai_unavailable(self, post):
         with self.assertRaises(ai.AIUnavailable):
             ai.call_openrouter([{"role": "user", "content": "x"}])
+
+    @mock.patch("meds.ai.requests.post", side_effect=ai.requests.Timeout("slow"))
+    def test_timeout_raises_ai_unavailable(self, post):
+        with self.assertRaises(ai.AIUnavailable):
+            ai.call_openrouter([{"role": "user", "content": "x"}])
+        self.assertEqual(post.call_args.kwargs["timeout"], (5, ai.TIMEOUT_SECONDS))
+
+    def test_ai_timeouts_leave_margin_under_gunicorn_timeout(self):
+        # Not a hard cap on the call (the read timeout restarts with each byte), but with a normal answer
+        # connect + read stays well under gunicorn's limit, so a slow AI shows our message, not a 502 page.
+        gunicorn_conf = runpy.run_path(str(Path(settings.BASE_DIR) / "gunicorn.conf.py"))
+        self.assertLessEqual(5 + ai.TIMEOUT_SECONDS, gunicorn_conf["timeout"] - 20)
 
     @override_settings(OPENROUTER_API_KEY="")
     def test_missing_key_raises_ai_unavailable(self):

@@ -19,6 +19,7 @@ manage.py              Django command entry point (created by startproject)
 requirements.txt       Python dependencies
 .env.example           Environment variable names (no real secrets; copy to .env)
 build.sh               Render build step: install, collectstatic, migrate, seed
+gunicorn.conf.py       gunicorn settings (worker timeout 60 s, longer than the AI wait)
 
 config/                Project settings, root URLs, WSGI entry point
 accounts/              Sign up, log in, log out; seed command for demo accounts

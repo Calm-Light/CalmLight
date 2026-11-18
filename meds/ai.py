@@ -11,6 +11,7 @@ Rules:
 
 import json
 import logging
+import time
 from decimal import Decimal, InvalidOperation
 
 import requests
@@ -21,6 +22,9 @@ from meds.models import DoseUnit, Frequency, MealTiming, Route
 logger = logging.getLogger(__name__)
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+# requests' read timeout: the longest gap between pieces of the answer, not a cap on the whole call (each new
+# byte restarts it, and DNS lookup isn't covered by the connect limit). Keep it well under gunicorn's worker
+# timeout (gunicorn.conf.py). If WORKER TIMEOUT ever shows in the logs, add an overall deadline here.
 TIMEOUT_SECONDS = 30
 MAX_LABEL_CHARS = 1000
 
@@ -38,20 +42,22 @@ def call_openrouter(messages, response_format=None):
         payload["response_format"] = response_format
         # Only route to providers that support structured output.
         payload["provider"] = {"require_parameters": True}
+    started = time.monotonic()
     try:
         response = requests.post(
             OPENROUTER_URL,
             headers={"Authorization": f"Bearer {settings.OPENROUTER_API_KEY}"},
             json=payload,
-            timeout=TIMEOUT_SECONDS,
+            timeout=(5, TIMEOUT_SECONDS),  # (connect, read)
         )
+        logger.info("OpenRouter answered in %.1f s (status %s)", time.monotonic() - started, response.status_code)
         response.raise_for_status()
         content = response.json()["choices"][0]["message"]["content"]
         if not content:
             raise ValueError("empty response")
         return content
     except (requests.RequestException, KeyError, IndexError, TypeError, ValueError) as exc:
-        logger.warning("OpenRouter call failed: %s", exc)
+        logger.warning("OpenRouter call failed after %.1f s: %s", time.monotonic() - started, exc)
         raise AIUnavailable(str(exc)) from exc
 
 

@@ -31,6 +31,7 @@ class MedicationForm(BootstrapMixin, forms.ModelForm):
             "start_date": DateInput(),
             "end_date": DateInput(),
         }
+        error_messages = {"dose_amount": {"min_value": "Dose must be more than 0."}}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
