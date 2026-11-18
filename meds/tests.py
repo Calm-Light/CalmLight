@@ -180,8 +180,9 @@ class OpenRouterClientTests(SimpleTestCase):
             ai.call_openrouter([{"role": "user", "content": "x"}])
         self.assertEqual(post.call_args.kwargs["timeout"], (5, ai.TIMEOUT_SECONDS))
 
-    def test_ai_wait_is_shorter_than_gunicorn_timeout(self):
-        # If the AI wait were as long as gunicorn's, gunicorn would kill slow requests first (502 page).
+    def test_ai_timeouts_leave_margin_under_gunicorn_timeout(self):
+        # Not a hard cap on the call (the read timeout restarts with each byte), but with a normal answer
+        # connect + read stays well under gunicorn's limit, so a slow AI shows our message, not a 502 page.
         gunicorn_conf = runpy.run_path(str(Path(settings.BASE_DIR) / "gunicorn.conf.py"))
         self.assertLessEqual(5 + ai.TIMEOUT_SECONDS, gunicorn_conf["timeout"] - 20)
 

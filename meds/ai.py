@@ -22,7 +22,9 @@ from meds.models import DoseUnit, Frequency, MealTiming, Route
 logger = logging.getLogger(__name__)
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-# Seconds to wait for the AI's answer. Must stay well under gunicorn's worker timeout (gunicorn.conf.py).
+# requests' read timeout: the longest gap between pieces of the answer, not a cap on the whole call (each new
+# byte restarts it, and DNS lookup isn't covered by the connect limit). Keep it well under gunicorn's worker
+# timeout (gunicorn.conf.py). If WORKER TIMEOUT ever shows in the logs, add an overall deadline here.
 TIMEOUT_SECONDS = 30
 MAX_LABEL_CHARS = 1000
 
@@ -55,7 +57,7 @@ def call_openrouter(messages, response_format=None):
             raise ValueError("empty response")
         return content
     except (requests.RequestException, KeyError, IndexError, TypeError, ValueError) as exc:
-        logger.warning("OpenRouter call failed: %s", exc)
+        logger.warning("OpenRouter call failed after %.1f s: %s", time.monotonic() - started, exc)
         raise AIUnavailable(str(exc)) from exc
 
 
