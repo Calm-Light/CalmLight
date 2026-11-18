@@ -5,6 +5,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
 from django.db.models import F, Q
+from django.utils import timezone
 
 
 class DoseUnit(models.TextChoices):
@@ -41,6 +42,18 @@ class MealTiming(models.TextChoices):
     AFTER = "after", "After meals"
 
 
+class MedicationQuerySet(models.QuerySet):
+    def active(self, today=None):
+        """Medications the user still takes: not stopped, and the end date (if any) not yet passed."""
+        today = today or timezone.localdate()
+        return self.filter(discontinued_on__isnull=True).filter(Q(end_date__isnull=True) | Q(end_date__gte=today))
+
+    def past(self, today=None):
+        """Stopped medications and ones whose end date has passed (the user's medication history)."""
+        today = today or timezone.localdate()
+        return self.filter(Q(discontinued_on__isnull=False) | Q(end_date__lt=today))
+
+
 class Medication(models.Model):
     """One medication a user takes. Entered by the user; the app never prescribes."""
 
@@ -57,8 +70,11 @@ class Medication(models.Model):
     )
     start_date = models.DateField()
     end_date = models.DateField(null=True, blank=True, help_text="Leave empty if there is no end date.")
+    discontinued_on = models.DateField(null=True, blank=True, help_text="Set when the user stops taking it.")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    objects = MedicationQuerySet.as_manager()
 
     class Meta:
         ordering = ["name", "id"]
@@ -84,6 +100,20 @@ class Medication(models.Model):
         super().clean()
         if self.start_date and self.end_date and self.end_date < self.start_date:
             raise ValidationError({"end_date": "End date cannot be earlier than the start date."})
+
+    def discontinue(self, today=None):
+        """Stop taking it today. It moves to the user's past medications; the planned end date is kept."""
+        self.discontinued_on = today or timezone.localdate()
+        self.save(update_fields=["discontinued_on", "updated_at"])
+
+    def resume(self):
+        """Undo a stop. The end date was never changed, so nothing else needs restoring."""
+        self.discontinued_on = None
+        self.save(update_fields=["discontinued_on", "updated_at"])
+
+    @property
+    def has_ended(self):
+        return self.end_date is not None and self.end_date < timezone.localdate()
 
 
 class AIRequest(models.Model):
