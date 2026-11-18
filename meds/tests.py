@@ -141,10 +141,21 @@ class MedicationSeedTests(TestCase):
         call_command("seed", stdout=mock.MagicMock())
         call_command("seed", stdout=mock.MagicMock())
         member = get_user_model().objects.get(username="member@example.com")
-        self.assertEqual(member.medications.count(), 3)
+        self.assertEqual(member.medications.count(), 4)
+        self.assertEqual(member.medications.active().count(), 3)
+        self.assertEqual([m.name for m in member.medications.past()], ["amoxicillin"])
         self.assertTrue(all(m.start_date <= timezone.localdate() - timedelta(days=1) for m in member.medications.all()))
         admin = get_user_model().objects.get(username="admin@example.com")
         self.assertEqual(admin.medications.count(), 0)
+
+    @mock.patch.dict("os.environ", {"SEED_ADMIN_PASSWORD": "a-pw-123456", "SEED_MEMBER_PASSWORD": "m-pw-123456"})
+    def test_seed_adds_stopped_demo_even_if_member_takes_amoxicillin(self):
+        call_command("seed", stdout=mock.MagicMock())
+        member = get_user_model().objects.get(username="member@example.com")
+        member.medications.filter(name="amoxicillin").update(discontinued_on=None)  # a tester restarted it
+        call_command("seed", stdout=mock.MagicMock())
+        self.assertEqual(member.medications.past().filter(name="amoxicillin").count(), 1)
+        self.assertEqual(member.medications.active().filter(name="amoxicillin").count(), 1)
 
 
 @override_settings(OPENROUTER_API_KEY="test-key", OPENROUTER_MODEL="test-model")

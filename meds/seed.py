@@ -20,6 +20,10 @@ DEMO_MEDICATIONS = [
      "times_per_day": 1, "meal_timing": "none"},
 ]
 
+# Shown under "Past medications": stopped a week ago.
+STOPPED_DEMO = {"name": "amoxicillin", "dose_amount": Decimal("500"), "dose_unit": "mg", "route": "oral",
+                "times_per_day": 3, "meal_timing": "none"}
+
 
 def seed(stdout):
     user = get_user_model().objects.get(username=DEMO_USER)
@@ -30,3 +34,12 @@ def seed(stdout):
         )
         if created:
             stdout.write(f"created demo medication {data['name']}")
+    today = timezone.localdate()
+    # Look for a *stopped* amoxicillin, so one a tester added by hand doesn't stop the demo from being created.
+    _, created = Medication.objects.get_or_create(
+        user=user, name=STOPPED_DEMO["name"], discontinued_on__isnull=False,
+        defaults={**STOPPED_DEMO, "start_date": today - timedelta(days=21),
+                  "discontinued_on": today - timedelta(days=7)},
+    )
+    if created:
+        stdout.write(f"created stopped demo medication {STOPPED_DEMO['name']}")
