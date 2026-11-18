@@ -35,8 +35,9 @@ def seed(stdout):
         if created:
             stdout.write(f"created demo medication {data['name']}")
     today = timezone.localdate()
+    # Look for a *stopped* amoxicillin, so one a tester added by hand doesn't stop the demo from being created.
     _, created = Medication.objects.get_or_create(
-        user=user, name=STOPPED_DEMO["name"],
+        user=user, name=STOPPED_DEMO["name"], discontinued_on__isnull=False,
         defaults={**STOPPED_DEMO, "start_date": today - timedelta(days=21),
                   "discontinued_on": today - timedelta(days=7)},
     )

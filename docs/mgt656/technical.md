@@ -39,6 +39,8 @@ Staging: https://calm-light-staging.onrender.com · Production: https://calm-lig
 | Static | ruff lint; `manage.py check`; no missing migrations | CI |
 | Manual | After each merge, the reviewer tries the new story on staging (desktop and phone); before a production deploy we repeat the main flows on staging, then check production | PR checklists |
 
+Tests were added with each story, in the same pull request: PR #15 (add medication), #17 and #36 (smart add, daily limit), #34 (edit, stop, restart, delete), #35 (email signup, 404 and 500 pages), #37 (health check, demo data).
+
 **What we mock:** every call to OpenRouter (`requests.post` or `call_openrouter`), so tests never use the network, never spend credits and give the same result every run. We mock a database failure only in the `/healthz` test. The database itself is not mocked: tests run against Postgres in CI, the same database we use in production.
 
 **What we don't test automatically, and why:**

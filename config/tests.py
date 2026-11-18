@@ -6,6 +6,7 @@ from django.test import TestCase
 
 class HealthzTests(TestCase):
     def test_ok_when_database_answers(self):
+        # No login: the health check must be public, so Render can call it.
         response = self.client.get("/healthz")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"status": "ok"})
@@ -15,6 +16,3 @@ class HealthzTests(TestCase):
             response = self.client.get("/healthz")
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json()["status"], "error")
-
-    def test_public_without_login(self):
-        self.assertNotIn("/login/", self.client.get("/healthz").get("Location", ""))
