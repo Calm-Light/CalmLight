@@ -6,8 +6,11 @@ Built with Django + PostgreSQL for MGT 656.
 
 ## Status
 
-Sprint 1 walking skeleton: Django project, accounts (sign up / log in / log out), seed command,
-health check, base layout, and placeholder routes for the A/B test page and MedTrack features.
+Sprint 2: sign up and log in with email; add, edit, stop, restart and delete medications, with current and
+past medications on the home page; "smart add" fills the medication form from pasted label text with AI
+(OpenRouter), with a per-user daily limit; friendly 404 and 500 pages; A/B test page; CI runs lint and tests.
+Staging: https://calm-light-staging.onrender.com · Production: https://calm-light-production.onrender.com
+Next (Sprint 3): today's dose checklist (mark taken or missed) and intake history.
 
 ## Layout
 
@@ -15,12 +18,12 @@ health check, base layout, and placeholder routes for the A/B test page and MedT
 manage.py              Django command entry point (created by startproject)
 requirements.txt       Python dependencies
 .env.example           Environment variable names (no real secrets; copy to .env)
-render.yaml / build.sh Render deployment config (added in Sprint 1)
+build.sh               Render build step: install, collectstatic, migrate, seed
 
 config/                Project settings, root URLs, WSGI entry point
 accounts/              Sign up, log in, log out; seed command for demo accounts
 abtest/                A/B test page and /stats endpoint
-meds/                  MedTrack features: medications, schedules, dose log, weekly AI summary
+meds/                  Medications (add, edit, stop, delete), AI smart add (meds/ai.py), demo data (meds/seed.py)
 templates/             HTML templates (base layout, login, A/B page, meds pages)
 static/                CSS, images, a little JS
 
@@ -57,7 +60,7 @@ Run the linter (same check as CI): `pip install ruff==0.15.7` once, then `ruff c
 |---|---|---|
 | A/B test page | `abtest/views.py` (`page`, `stats`), `abtest/models.py`, `templates/abtest/page.html`, `abtest/tests.py` | Routes `/<hash>/` and `/<hash>/stats`; `settings.ABTEST_HASH`, `settings.TEAM_MEMBERS` |
 | Medication features | `meds/models.py`, `meds/views.py`, `meds/urls.py`, `templates/meds/` | `/` is the logged-in home page (`home` view) |
-| AI weekly summary | `meds/ai.py` only | `call_openrouter()` with timeout and `AIUnavailable` errors; tests mock it |
+| AI features | `meds/ai.py` (smart add: `parse_label`) | `call_openrouter()` with timeout and `AIUnavailable` errors; `AIRequest` daily limit; tests mock it |
 | Demo data | a `seed(stdout)` function in your app, listed in `EXTRA_SEEDERS` in `accounts/management/commands/seed.py` | Grader accounts |
 | Pages | `{% extends "base.html" %}` and fill `{% block content %}` | Bootstrap 5, nav bar, log out button |
 | Settings / secrets | environment variables; add new names to `.env.example` | `config/settings.py` |
@@ -72,6 +75,13 @@ Run the linter (same check as CI): `pip install ruff==0.15.7` once, then `ruff c
 
 ## Deploy (Render + Neon)
 
-`render.yaml` defines the staging web service. Render runs `build.sh` (install, collectstatic, migrate, seed)
-and starts `gunicorn` on `$PORT`. Set `DATABASE_URL` (Neon), `SEED_ADMIN_PASSWORD`, `SEED_MEMBER_PASSWORD`
-in the Render dashboard. Health check: `/healthz`.
+Two Render web services, set up in the Render dashboard, each with its own Neon database:
+
+- **staging** (`calm-light-staging`): deploys automatically on every merge to `main`.
+- **production** (`calm-light-production`): auto-deploy is off. After checking a change on staging, click
+  *Manual Deploy → Deploy latest commit* on Render.
+
+Both use build command `./build.sh` (install, collectstatic, migrate, seed), start command
+`gunicorn config.wsgi --bind 0.0.0.0:$PORT --log-file -`, and health check path `/healthz`.
+Environment variables (names in `.env.example`): `SECRET_KEY`, `DEBUG=False`, `DATABASE_URL` (Neon),
+`SEED_ADMIN_PASSWORD`, `SEED_MEMBER_PASSWORD`, `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `AI_DAILY_LIMIT`.
