@@ -84,3 +84,25 @@ class Medication(models.Model):
         super().clean()
         if self.start_date and self.end_date and self.end_date < self.start_date:
             raise ValidationError({"end_date": "End date cannot be earlier than the start date."})
+
+
+class AIRequest(models.Model):
+    """One call to the LLM, used for the per-user daily limit."""
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="ai_requests")
+    feature = models.CharField(max_length=30)
+    succeeded = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.feature} by {self.user} at {self.created_at:%Y-%m-%d %H:%M}"
+
+    @classmethod
+    def used_today(cls, user):
+        from django.utils import timezone
+
+        start = timezone.localtime().replace(hour=0, minute=0, second=0, microsecond=0)
+        return cls.objects.filter(user=user, created_at__gte=start).count()

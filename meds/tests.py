@@ -9,7 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from meds import ai
-from meds.models import Medication
+from meds.models import AIRequest, Medication
 
 PASSWORD = "a-long-pass-987"
 VALID = {
@@ -163,3 +163,155 @@ class OpenRouterClientTests(SimpleTestCase):
     def test_missing_key_raises_ai_unavailable(self):
         with self.assertRaises(ai.AIUnavailable):
             ai.call_openrouter([])
+
+
+class CleanLabelFieldsTests(SimpleTestCase):
+    """The AI's answer is never trusted as-is."""
+
+    def test_keeps_valid_values(self):
+        fields, missing = ai.clean_label_fields({
+            "name": "  Metformin  ", "dose_amount": 500, "dose_unit": "mg", "route": "oral",
+            "times_per_day": 2, "meal_timing": "with",
+        })
+        self.assertEqual(fields, {"name": "Metformin", "dose_amount": Decimal("500"), "dose_unit": "mg",
+                                  "route": "oral", "times_per_day": 2, "meal_timing": "with"})
+        self.assertEqual(missing, [])
+
+    def test_drops_invalid_values_and_reports_them_missing(self):
+        fields, missing = ai.clean_label_fields({
+            "name": "", "dose_amount": -5, "dose_unit": "spoonful", "route": "by magic",
+            "times_per_day": 7, "meal_timing": "whenever",
+        })
+        self.assertEqual(fields, {})
+        self.assertEqual(missing, ["name", "dose", "unit", "route", "how often", "meal instructions"])
+
+    def test_nulls_and_odd_types(self):
+        fields, _ = ai.clean_label_fields({"name": None, "dose_amount": True, "times_per_day": "2"})
+        self.assertEqual(fields, {})
+        self.assertEqual(ai.clean_label_fields("not a dict"), ({}, list(ai.FIELD_LABELS.values())))
+
+    def test_dose_amount_from_string_and_float(self):
+        self.assertEqual(ai.clean_label_fields({"dose_amount": "2.5"})[0]["dose_amount"], Decimal("2.5"))
+        self.assertEqual(ai.clean_label_fields({"dose_amount": 0.5})[0]["dose_amount"], Decimal("0.5"))
+        self.assertNotIn("dose_amount", ai.clean_label_fields({"dose_amount": "NaN"})[0])
+
+    def test_whole_number_doses_show_as_plain_digits(self):
+        for raw, shown in [(500, "500"), (10, "10"), (1000, "1000"), ("100.00", "100"), (2.5, "2.5"), (0.25, "0.25")]:
+            self.assertEqual(str(ai.clean_label_fields({"dose_amount": raw})[0]["dose_amount"]), shown)
+
+
+@override_settings(OPENROUTER_API_KEY="test-key", OPENROUTER_MODEL="test-model")
+class ParseLabelTests(SimpleTestCase):
+    @mock.patch("meds.ai.requests.post")
+    def test_sends_schema_and_only_label_text(self, post):
+        post.return_value.json.return_value = {"choices": [{"message": {"content": '{"name": "metformin"}'}}]}
+        fields, _ = ai.parse_label("Metformin 500 mg twice daily")
+        self.assertEqual(fields, {"name": "metformin"})
+        payload = post.call_args.kwargs["json"]
+        self.assertEqual(payload["response_format"]["type"], "json_schema")
+        self.assertTrue(payload["response_format"]["json_schema"]["strict"])
+        self.assertEqual(payload["messages"][1], {"role": "user", "content": "Metformin 500 mg twice daily"})
+
+    @mock.patch("meds.ai.call_openrouter", return_value='```json\n{"name": "lisinopril"}\n```')
+    def test_accepts_json_in_code_fence(self, _):
+        self.assertEqual(ai.parse_label("x")[0], {"name": "lisinopril"})
+
+    @mock.patch("meds.ai.call_openrouter", return_value="Sorry, I can't help with that.")
+    def test_non_json_reply_raises_ai_unavailable(self, _):
+        with self.assertRaises(ai.AIUnavailable):
+            ai.parse_label("x")
+
+    @mock.patch("meds.ai.requests.post")
+    def test_empty_content_raises_ai_unavailable(self, post):
+        post.return_value.json.return_value = {"choices": [{"message": {"content": None}}]}
+        with self.assertRaises(ai.AIUnavailable):
+            ai.parse_label("x")
+
+    @mock.patch("meds.ai.call_openrouter", return_value="{}")
+    def test_long_text_is_truncated(self, call):
+        ai.parse_label("a" * 5000)
+        self.assertEqual(len(call.call_args.args[0][1]["content"]), ai.MAX_LABEL_CHARS)
+
+
+FILLED = ({"name": "metformin", "dose_amount": Decimal("500"), "dose_unit": "mg", "route": "oral",
+           "times_per_day": 2, "meal_timing": "with"}, [])
+
+
+@override_settings(AI_DAILY_LIMIT=3)
+class SmartAddViewTests(TestCase):
+    def setUp(self):
+        self.user = make_user("alice@example.com")
+        self.client.login(username="alice@example.com", password=PASSWORD)
+        self.url = reverse("medication_fill")
+
+    def fill(self, text="Metformin 500 mg tablet, take 1 twice daily with meals"):
+        return self.client.post(self.url, {"label_text": text})
+
+    @mock.patch("meds.views.ai.parse_label", return_value=FILLED)
+    def test_fills_form_but_saves_nothing(self, parse):
+        response = self.fill()
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'value="metformin"')
+        self.assertContains(response, '<option value="mg" selected>')
+        self.assertContains(response, "Check every field before you save")
+        self.assertEqual(Medication.objects.count(), 0)
+        parse.assert_called_once()
+
+    @override_settings(OPENROUTER_API_KEY="test-key", OPENROUTER_MODEL="test-model")
+    @mock.patch("meds.ai.call_openrouter", return_value='{"name": "metformin", "dose_amount": 500}')
+    def test_filled_dose_shows_plain_digits(self, _):
+        response = self.fill()
+        self.assertContains(response, 'name="dose_amount" value="500"')
+        self.assertNotContains(response, "5E+2")
+
+    @mock.patch("meds.views.ai.parse_label", return_value=({"name": "metformin"}, ["dose", "unit", "how often"]))
+    def test_lists_fields_the_user_must_fill(self, _):
+        self.assertContains(self.fill(), "Please fill in: dose, unit, how often.")
+
+    @mock.patch("meds.views.ai.parse_label", side_effect=ai.AIUnavailable("down"))
+    def test_ai_failure_shows_message_and_keeps_manual_form(self, _):
+        response = self.fill()
+        self.assertContains(response, "AI fill isn&#x27;t available right now")
+        self.assertContains(response, 'name="dose_amount"')
+        usage = AIRequest.objects.get()
+        self.assertFalse(usage.succeeded)
+
+    @mock.patch("meds.views.ai.parse_label", return_value=({}, list(ai.FIELD_LABELS.values())))
+    def test_nothing_found(self, _):
+        self.assertContains(self.fill("hello"), "couldn&#x27;t find medication details")
+
+    @mock.patch("meds.views.ai.parse_label", return_value=FILLED)
+    def test_daily_limit_blocks_extra_calls(self, parse):
+        for _ in range(3):
+            self.fill()
+        response = self.fill()
+        self.assertContains(response, "reached today&#x27;s limit")
+        self.assertEqual(parse.call_count, 3)
+        self.assertContains(response, "0 AI fills left today")
+
+    @mock.patch("meds.views.ai.parse_label", return_value=FILLED)
+    def test_limit_is_per_user(self, parse):
+        for _ in range(3):
+            self.fill()
+        make_user("bob@example.com")
+        self.client.login(username="bob@example.com", password=PASSWORD)
+        self.fill()
+        self.assertEqual(parse.call_count, 4)
+
+    @mock.patch("meds.views.ai.parse_label")
+    def test_empty_text_does_not_call_ai(self, parse):
+        response = self.fill("")
+        self.assertContains(response, "This field is required.")
+        parse.assert_not_called()
+        self.assertEqual(AIRequest.objects.count(), 0)
+
+    def test_requires_login_and_post(self):
+        self.assertEqual(self.client.get(self.url).status_code, 405)
+        self.client.logout()
+        self.assertRedirects(self.fill(), f"{reverse('login')}?next={self.url}", fetch_redirect_response=False)
+
+    @mock.patch("meds.views.ai.parse_label", return_value=FILLED)
+    def test_user_can_save_the_filled_form(self, _):
+        self.fill()
+        self.client.post(reverse("medication_add"), {**VALID})
+        self.assertEqual(Medication.objects.get().user, self.user)

@@ -3,8 +3,25 @@
 {% block content %}
 <div class="row justify-content-center"><div class="col-md-8 col-lg-6">
   <h1 class="h3 mb-3">Add medication</h1>
+
+  <div class="card mb-4">
+    <div class="card-body">
+      <h2 class="h6">Fill in with AI <span class="badge text-bg-light">optional</span></h2>
+      <form method="post" action="{% url 'medication_fill' %}" novalidate>{% csrf_token %}
+        {% with field=label_form.label_text %}{% include "registration/_field.html" %}{% endwith %}
+        <div class="d-flex flex-wrap align-items-center gap-2">
+          <button class="btn btn-outline-primary" type="submit" {% if not ai_left %}disabled{% endif %}>Fill in the form</button>
+          <span class="small text-body-secondary">{{ ai_left }} AI fill{{ ai_left|pluralize }} left today</span>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {% if ai_filled and ai_missing %}
+  <div class="alert alert-warning" role="alert">Please fill in: {{ ai_missing|join:", " }}.</div>
+  {% endif %}
   {% include "registration/_form_errors.html" %}
-  <form method="post" novalidate>{% csrf_token %}
+  <form method="post" action="{% url 'medication_add' %}" novalidate>{% csrf_token %}
     {% with field=form.name %}{% include "registration/_field.html" %}{% endwith %}
     <div class="row g-2">
       <div class="col-6">{% with field=form.dose_amount %}{% include "registration/_field.html" %}{% endwith %}</div>
