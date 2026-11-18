@@ -49,6 +49,8 @@ Open http://127.0.0.1:8000/login/ and log in as `member@example.com` or `admin@e
 
 Run the tests: `python manage.py test`
 
+Run the linter (same check as CI): `pip install ruff==0.15.7` once, then `ruff check .` (`ruff check . --fix` fixes import order and similar issues).
+
 ## Where to add things
 
 | You are working on | Put it here | Already wired up |
@@ -66,7 +68,7 @@ Run the tests: `python manage.py test`
 - Never commit `.env`, passwords or API keys.
 - Change the database only through migrations (`python manage.py makemigrations`).
 - Tests never call OpenRouter or any other outside service; mock them.
-- GitHub Actions runs `python manage.py test` against Postgres on every pull request.
+- GitHub Actions runs `ruff check .` and `python manage.py test` (against Postgres) on every pull request.
 
 ## Deploy (Render + Neon)
 

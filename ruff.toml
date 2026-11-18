@@ -1,0 +1,9 @@
+# Lint settings for `ruff check .` (run locally and in CI).
+target-version = "py311"
+line-length = 120
+extend-exclude = ["*/migrations/*"]
+
+[lint]
+# E/W: style errors, F: real bugs (undefined names, unused imports), I: import order,
+# B: common bug patterns, DJ: Django-specific checks, UP: modern Python syntax.
+select = ["E", "W", "F", "I", "B", "DJ", "UP"]
