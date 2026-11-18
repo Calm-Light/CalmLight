@@ -11,6 +11,7 @@ Rules:
 
 import json
 import logging
+import time
 from decimal import Decimal, InvalidOperation
 
 import requests
@@ -21,6 +22,7 @@ from meds.models import DoseUnit, Frequency, MealTiming, Route
 logger = logging.getLogger(__name__)
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+# Seconds to wait for the AI's answer. Must stay well under gunicorn's worker timeout (gunicorn.conf.py).
 TIMEOUT_SECONDS = 30
 MAX_LABEL_CHARS = 1000
 
@@ -38,13 +40,15 @@ def call_openrouter(messages, response_format=None):
         payload["response_format"] = response_format
         # Only route to providers that support structured output.
         payload["provider"] = {"require_parameters": True}
+    started = time.monotonic()
     try:
         response = requests.post(
             OPENROUTER_URL,
             headers={"Authorization": f"Bearer {settings.OPENROUTER_API_KEY}"},
             json=payload,
-            timeout=TIMEOUT_SECONDS,
+            timeout=(5, TIMEOUT_SECONDS),  # (connect, read)
         )
+        logger.info("OpenRouter answered in %.1f s (status %s)", time.monotonic() - started, response.status_code)
         response.raise_for_status()
         content = response.json()["choices"][0]["message"]["content"]
         if not content:
