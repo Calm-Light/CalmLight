@@ -66,4 +66,8 @@ def medication_fill(request):
         return _render_add(request, MedicationForm(), label_form)
 
     messages.info(request, "The AI filled in the form. Check every field before you save. It can make mistakes.")
-    return _render_add(request, MedicationForm(initial=fields), label_form, ai_missing=missing, ai_filled=True)
+    to_fill = [m for m in missing if m not in ai.FIELDS_WITH_DEFAULT]
+    to_check = [m for m in missing if m in ai.FIELDS_WITH_DEFAULT]
+    return _render_add(
+        request, MedicationForm(initial=fields), label_form, ai_missing=to_fill, ai_check=to_check, ai_filled=True
+    )

@@ -268,6 +268,23 @@ class SmartAddViewTests(TestCase):
     def test_lists_fields_the_user_must_fill(self, _):
         self.assertContains(self.fill(), "Please fill in: dose, unit, how often.")
 
+    @mock.patch("meds.views.ai.parse_label",
+                return_value=({"name": "metformin"}, ["dose", "route", "meal instructions"]))
+    def test_fields_with_a_default_are_listed_to_check_not_to_fill(self, _):
+        response = self.fill()
+        self.assertContains(response, "Please fill in: dose.")
+        self.assertContains(response, "Please check: route, meal instructions.")
+
+    @mock.patch("meds.views.ai.parse_label", return_value=({"name": "metformin"}, ["route"]))
+    def test_only_route_missing_shows_no_fill_in_warning(self, _):
+        response = self.fill()
+        self.assertNotContains(response, "Please fill in")
+        self.assertContains(response, "Please check: route.")
+
+    def test_prompt_explains_route_and_spray_units(self):
+        self.assertIn("by mouth", ai.LABEL_PROMPT)
+        self.assertIn('"puff"', ai.LABEL_PROMPT)
+
     @mock.patch("meds.views.ai.parse_label", side_effect=ai.AIUnavailable("down"))
     def test_ai_failure_shows_message_and_keeps_manual_form(self, _):
         response = self.fill()
