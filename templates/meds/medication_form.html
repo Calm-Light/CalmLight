@@ -1,9 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Add medication · MedTrack{% endblock %}
+{% block title %}{% if medication %}Edit {{ editing_name }}{% else %}Add medication{% endif %} · MedTrack{% endblock %}
 {% block content %}
 <div class="row justify-content-center"><div class="col-md-8 col-lg-6">
-  <h1 class="h3 mb-3">Add medication</h1>
+  <h1 class="h3 mb-3">{% if medication %}Edit {{ editing_name }}{% else %}Add medication{% endif %}</h1>
 
+  {% if not medication %}
   <div class="card mb-4">
     <div class="card-body">
       <h2 class="h6">Fill in with AI <span class="badge text-bg-light">optional</span></h2>
@@ -16,12 +17,13 @@
       </form>
     </div>
   </div>
+  {% endif %}
 
   {% if ai_filled and ai_missing %}
   <div class="alert alert-warning" role="alert">Please fill in: {{ ai_missing|join:", " }}.</div>
   {% endif %}
   {% include "registration/_form_errors.html" %}
-  <form method="post" action="{% url 'medication_add' %}" novalidate>{% csrf_token %}
+  <form method="post" action="{% if medication %}{% url 'medication_edit' medication.pk %}{% else %}{% url 'medication_add' %}{% endif %}" novalidate>{% csrf_token %}
     {% with field=form.name %}{% include "registration/_field.html" %}{% endwith %}
     <div class="row g-2">
       <div class="col-6">{% with field=form.dose_amount %}{% include "registration/_field.html" %}{% endwith %}</div>
@@ -39,5 +41,10 @@
       <a class="btn btn-outline-secondary" href="{% url 'home' %}">Cancel</a>
     </div>
   </form>
+  {% if medication %}
+  <hr class="my-4">
+  <p class="small text-body-secondary mb-2">Entered this by mistake?</p>
+  <a class="btn btn-sm btn-outline-danger" href="{% url 'medication_delete' medication.pk %}">Delete this medication</a>
+  {% endif %}
 </div></div>
 {% endblock %}

@@ -10,23 +10,37 @@
 <div class="list-group">
   {% for med in medications %}
   <div class="list-group-item">
-    <div class="d-flex flex-wrap justify-content-between gap-2">
-      <span class="fw-semibold">{{ med.name }}</span>
-      <span>{{ med.dose }}</span>
-    </div>
-    <div class="small text-body-secondary">
-      {{ med.get_times_per_day_display }} · {{ med.get_route_display }}{% if med.meal_timing != "none" %} · {{ med.get_meal_timing_display }}{% endif %}
-    </div>
-    <div class="small text-body-secondary">
-      From {{ med.start_date|date:"M j, Y" }}{% if med.end_date %} to {{ med.end_date|date:"M j, Y" }}{% endif %}
+    {% include "meds/_medication_details.html" %}
+    <div class="d-flex gap-2 mt-2">
+      <a class="btn btn-sm btn-outline-primary" href="{% url 'medication_edit' med.pk %}">Edit</a>
+      <a class="btn btn-sm btn-outline-secondary" href="{% url 'medication_stop' med.pk %}">Stop taking</a>
     </div>
   </div>
   {% endfor %}
 </div>
 {% else %}
 <div class="text-center text-body-secondary border rounded p-4">
-  <p class="mb-2">You haven't added any medications yet.</p>
-  <a href="{% url 'medication_add' %}">Add your first medication</a>
+  <p class="mb-2">{% if past_medications %}You aren't taking any medications right now.{% else %}You haven't added any medications yet.{% endif %}</p>
+  <a href="{% url 'medication_add' %}">Add {% if past_medications %}a{% else %}your first{% endif %} medication</a>
+</div>
+{% endif %}
+
+{% if past_medications %}
+<h2 class="h5 mt-4 mb-2">Past medications</h2>
+<div class="list-group">
+  {% for med in past_medications %}
+  <div class="list-group-item text-body-secondary">
+    {% include "meds/_medication_details.html" %}
+    <div class="d-flex gap-2 mt-2">
+      <a class="btn btn-sm btn-outline-secondary" href="{% url 'medication_edit' med.pk %}">Edit</a>
+      {% if med.discontinued_on %}
+      <form method="post" action="{% url 'medication_resume' med.pk %}">{% csrf_token %}
+        <button class="btn btn-sm btn-outline-secondary" type="submit">Restart</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
 </div>
 {% endif %}
 
