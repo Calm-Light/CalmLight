@@ -21,7 +21,7 @@ Staging: https://calm-light-staging.onrender.com · Production: https://calm-lig
 - **Privacy:** only the pasted label text is sent (no name, email or other medications), and the form reminds users not to paste personal details. Calls are made from the server; the browser never sees the key.
 - **Files and PRs:** `meds/ai.py` (`parse_label`, `clean_label_fields`, `call_openrouter`, `LABEL_SCHEMA`), `meds/views.py` (`medication_fill`), `templates/meds/medication_form.html`. PR #17, #36 (prompt rules for route and units).
 - **See it working:** log in as the member account → *Add medication* → paste `Metformin 500 mg tablet. Take 1 tablet by mouth twice daily with meals.` → *Fill in the form*.
-- **Model:** `google/gemini-2.5-flash-lite` on OpenRouter, using the course's API key. Every call uses that key's shared budget, which is why we also have item 3. The model is an environment variable (`OPENROUTER_MODEL`), so we can switch without a code change.
+- **How we chose the model:** with the course's OpenRouter key we tried `google/gemini-2.5-flash-lite`, `openai/gpt-4o-mini` and `deepseek/deepseek-v4-flash` on the same six real-style labels. Gemini and GPT-4o-mini filled the same fields; Gemini answered in under a second, DeepSeek sometimes took up to 10 seconds. Every call uses the course key's shared budget, which is why we also have item 3. The model is an environment variable (`OPENROUTER_MODEL`), so we can switch without a code change.
 
 ### 3. AI: per-user daily usage limit
 
